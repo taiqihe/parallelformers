@@ -16,7 +16,7 @@ import os
 import traceback
 from contextlib import suppress
 from dataclasses import _is_dataclass_instance
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import torch
 import torch.multiprocessing as mp
@@ -71,7 +71,7 @@ class parallelize(object):
         self,
         model: nn.Module,
         fp16: bool,
-        num_gpus: int,
+        num_gpus: Union[int, list],
         custom_policies=None,
         master_addr: str = "127.0.0.1",
         master_port: int = 29500,
@@ -100,7 +100,7 @@ class parallelize(object):
         self.model = model.half() if fp16 else model
         self.model.eval()
         self.fp16 = fp16
-        self.num_gpus = num_gpus
+        # self.num_gpus = num_gpus
         self.backend = backend
         self.daemon = daemon
         self.verbose = verbose
@@ -167,7 +167,7 @@ class parallelize(object):
 
     def init_environments(
         self,
-        num_gpus: int,
+        num_gpus: Union[int, list],
         master_addr: str,
         master_port: int,
     ) -> None:
@@ -183,10 +183,16 @@ class parallelize(object):
         os.environ["MKL_SERVICE_FORCE_INTEL"] = "GNU"
         os.environ["MASTER_ADDR"] = str(master_addr)
         os.environ["MASTER_PORT"] = str(master_port)
-        os.environ["WORLD_SIZE"] = str(num_gpus)
-        os.environ["CUDA_VISIBLE_DEVICES"] = ", ".join(
-            [str(i) for i in range(num_gpus)]
-        )
+        if type(num_gpus) == int:
+            os.environ["WORLD_SIZE"] = str(num_gpus)
+            os.environ["CUDA_VISIBLE_DEVICES"] = ", ".join(
+                [str(i) for i in range(num_gpus)]
+            )
+            self.num_gpus = num_gpus
+        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, num_gpus))
+            self.num_gpus = len(num_gpus)
+            os.environ["WORLD_SIZE"] = str(self.num_gpus)
 
     def register_hijack_methods(self, method: str) -> None:
         """
